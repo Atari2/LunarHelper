@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Xml.Serialization;
 using AsarCLR;
@@ -69,11 +70,11 @@ namespace SMWPatcher
             }
 
             // set the working directory
-            if (!String.IsNullOrWhiteSpace(Config.WorkingDirectory))
+            if (!string.IsNullOrWhiteSpace(Config.WorkingDirectory))
                 Directory.SetCurrentDirectory(Config.WorkingDirectory);
 
             // some error checks
-            if (String.IsNullOrWhiteSpace(Config.InputPath))
+            if (string.IsNullOrWhiteSpace(Config.InputPath))
             {
                 Error("No Input ROM path provided!");
                 return false;
@@ -83,12 +84,12 @@ namespace SMWPatcher
                 Error($"Input ROM file '{Config.InputPath}' does not exist!");
                 return false;
             }
-            else if (String.IsNullOrWhiteSpace(Config.OutputPath))
+            else if (string.IsNullOrWhiteSpace(Config.OutputPath))
             {
                 Error("No Output ROM path provided!");
                 return false;
             }
-            else if (String.IsNullOrWhiteSpace(Config.TempPath))
+            else if (string.IsNullOrWhiteSpace(Config.TempPath))
             {
                 Error("No Temp ROM path provided!");
                 return false;
@@ -148,11 +149,12 @@ namespace SMWPatcher
                 var dir = Path.GetFullPath(Path.GetDirectoryName(Config.GPSPath));
                 var rom = Path.GetRelativePath(dir, Path.GetFullPath(Config.TempPath));
 
-                ProcessStartInfo psi = new ProcessStartInfo(Config.GPSPath, $"-l \"{dir}/list.txt\" {rom}");
-                psi.RedirectStandardInput = true;
-                psi.RedirectStandardOutput = true;
-                psi.RedirectStandardError = true;
-                psi.WorkingDirectory = dir;
+                ProcessStartInfo psi = new ProcessStartInfo(Config.GPSPath, $"-l \"{dir}/list.txt\" {rom}") {
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    WorkingDirectory = dir
+                };
 
                 var p = Process.Start(psi);
                 p.WaitForExit();
@@ -171,7 +173,7 @@ namespace SMWPatcher
 
             // run AddMusicK
             Log("3 - AddMusicK", ConsoleColor.Cyan);
-            if (String.IsNullOrWhiteSpace(Config.AddMusicKPath))
+            if (string.IsNullOrWhiteSpace(Config.AddMusicKPath))
                 Log("No path to AddMusicK provided, no music will be inserted.", ConsoleColor.Red);
             else if (!File.Exists(Config.AddMusicKPath))
                 Log("AddMusicK not found at provided path, no music will be inserted.", ConsoleColor.Red);
@@ -181,11 +183,12 @@ namespace SMWPatcher
                 var rom = Path.GetRelativePath(dir, Path.GetFullPath(Config.TempPath));
                 Console.ForegroundColor = ConsoleColor.Gray;
 
-                ProcessStartInfo psi = new ProcessStartInfo(Config.AddMusicKPath, rom);
-                psi.RedirectStandardInput = true;
-                psi.RedirectStandardOutput = true;
-                psi.RedirectStandardError = true;
-                psi.WorkingDirectory = dir;
+                ProcessStartInfo psi = new ProcessStartInfo(Config.AddMusicKPath, rom) {
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    WorkingDirectory = dir
+                };
 
                 var p = Process.Start(psi);
                 while (!p.HasExited)
@@ -205,7 +208,7 @@ namespace SMWPatcher
 
             // import gfx
             Log("4 - Graphics", ConsoleColor.Cyan);
-            if (String.IsNullOrWhiteSpace(Config.LunarMagicPath))
+            if (string.IsNullOrWhiteSpace(Config.LunarMagicPath))
                 Log("No path to Lunar Magic provided, no graphics will be imported.", ConsoleColor.Red);
             else if (!File.Exists(Config.LunarMagicPath))
                 Log("Lunar Magic not found at provided path, no graphics will be imported.", ConsoleColor.Red);
@@ -238,9 +241,9 @@ namespace SMWPatcher
 
             // import levels
             Log("5 - Levels", ConsoleColor.Cyan);
-            if (String.IsNullOrWhiteSpace(Config.LevelsPath))
+            if (string.IsNullOrWhiteSpace(Config.LevelsPath))
                 Log("No path to Levels provided, no levels will be imported.", ConsoleColor.Red);
-            else if (String.IsNullOrWhiteSpace(Config.LunarMagicPath))
+            else if (string.IsNullOrWhiteSpace(Config.LunarMagicPath))
                 Log("No path to Lunar Magic provided, no levels will be imported.", ConsoleColor.Red);
             else if (!File.Exists(Config.LunarMagicPath))
                 Log("Lunar Magic not found at provided path, no levels will be imported.", ConsoleColor.Red);
@@ -266,11 +269,47 @@ namespace SMWPatcher
                 }             
             }
 
+            // apply pixi, it's important to apply it after having ported levels, as pixi relies on a hijack that only gets applied
+            // by LM if there are edited levels in the ROM
+            Log("6 - Pixi", ConsoleColor.Cyan);
+            if (string.IsNullOrWhiteSpace(Config.PixiPath))
+                Log("No path to Pixi provided, no sprites will be inserted.", ConsoleColor.Red);
+            else if (!File.Exists(Config.PixiPath))
+                Log("Pixi not found at provided path, no sprites will be inserted.", ConsoleColor.Red);
+            else {
+                var dir = Path.GetFullPath(Path.GetDirectoryName(Config.PixiPath));
+                var rom = Path.GetRelativePath(dir, Path.GetFullPath(Config.TempPath));
+                var listpath = Path.GetDirectoryName(dir) + Path.DirectorySeparatorChar + "list.txt";
+                Console.ForegroundColor = ConsoleColor.Gray;
+
+                // pixi is a weird little tool and we need to specify the list path
+                ProcessStartInfo psi = new ProcessStartInfo(Config.AddMusicKPath, $"-l {listpath} {rom}") {
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    WorkingDirectory = dir
+                };
+
+                var p = Process.Start(psi);
+                while (!p.HasExited)
+                    p.StandardInput.Write('a');
+
+                if (p.ExitCode == 0)
+                    Log("Pixi Success!", ConsoleColor.Green);
+                else {
+                    Log("Pixi Failure!", ConsoleColor.Red);
+                    Error(p.StandardOutput.ReadToEnd());
+                    return false;
+                }
+
+                Console.WriteLine();
+            }
+
             // import map16
             Log("6 - Map16", ConsoleColor.Cyan);
-            if (String.IsNullOrWhiteSpace(Config.Map16Path))
+            if (string.IsNullOrWhiteSpace(Config.Map16Path))
                 Log("No path to Levels provided, no map16 will be imported.", ConsoleColor.Red);
-            else if (String.IsNullOrWhiteSpace(Config.LunarMagicPath))
+            else if (string.IsNullOrWhiteSpace(Config.LunarMagicPath))
                 Log("No path to Lunar Magic provided, no map16 will be imported.", ConsoleColor.Red);
             else if (!File.Exists(Config.LunarMagicPath))
                 Log("Lunar Magic not found at provided path, no map16 will be imported.", ConsoleColor.Red);
@@ -295,9 +334,9 @@ namespace SMWPatcher
 
             // import overworld
             Log("6 - Overworld", ConsoleColor.Cyan);
-            if (String.IsNullOrWhiteSpace(Config.OverworldPath))
+            if (string.IsNullOrWhiteSpace(Config.OverworldPath))
                 Log("No path to Overworld ROM provided, no overworld will be imported.", ConsoleColor.Red);
-            else if (String.IsNullOrWhiteSpace(Config.LunarMagicPath))
+            else if (string.IsNullOrWhiteSpace(Config.LunarMagicPath))
                 Log("No path to Lunar Magic provided, no overworld will be imported.", ConsoleColor.Red);
             else if (!File.Exists(Config.LunarMagicPath))
                 Log("Lunar Magic not found at provided path, no overworld will be imported.", ConsoleColor.Red);
@@ -337,7 +376,7 @@ namespace SMWPatcher
             Log("Initiating Test routine!", ConsoleColor.Magenta);
 
             // test level
-            if (!String.IsNullOrWhiteSpace(Config.TestLevel) && !String.IsNullOrWhiteSpace(Config.TestLevelDest))
+            if (!string.IsNullOrWhiteSpace(Config.TestLevel) && !string.IsNullOrWhiteSpace(Config.TestLevelDest))
             {
                 var files = Directory.GetFiles(Config.LevelsPath, $"*{Config.TestLevel}*.mwl");
 
@@ -369,7 +408,7 @@ namespace SMWPatcher
                 }
 
                 // retroarch
-                if (!String.IsNullOrWhiteSpace(Config.RetroArchPath))
+                if (!string.IsNullOrWhiteSpace(Config.RetroArchPath))
                 {
                     Log("Launching RetroArch...", ConsoleColor.Yellow);
                     var fullRom = Path.GetFullPath(Config.OutputPath);
@@ -389,19 +428,19 @@ namespace SMWPatcher
             return true;
         }
 
-        static private void Error(String error)
+        static private void Error(string error)
         {
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine($"ERROR: {error}");
         }
 
-        static private void Log(String msg, ConsoleColor color = ConsoleColor.White)
+        static private void Log(string msg, ConsoleColor color = ConsoleColor.White)
         {
             Console.ForegroundColor = color;
             Console.WriteLine($"{msg}");
         }
 
-        static private void Lognl(String msg, ConsoleColor color = ConsoleColor.White)
+        static private void Lognl(string msg, ConsoleColor color = ConsoleColor.White)
         {
             Console.ForegroundColor = color;
             Console.Write($"{msg}");

@@ -8,26 +8,26 @@ namespace SMWPatcher
     [Serializable]
     public class Config
     {
-        public String InputPath;
-        public String OutputPath;
-        public String TempPath;
-        public String WorkingDirectory;
+        public string InputPath;
+        public string OutputPath;
+        public string TempPath;
+        public string WorkingDirectory;
+               
+        public string GPSPath;
+        public string AddMusicKPath;
+        public string PixiPath;
+        public string LunarMagicPath;
+        public string LevelsPath;
+        public string Map16Path;
+        public string OverworldPath;
 
-        public String AsarPath;
-        public String GPSPath;
-        public String AddMusicKPath;
-        public String LunarMagicPath;
-        public String LevelsPath;
-        public String Map16Path;
-        public String OverworldPath;
-
-        public List<String> Patches = new List<string>();
+        public List<string> Patches = new List<string>();
 
         public bool TestEnabled;
-        public String TestLevel;
-        public String TestLevelDest;
-        public String RetroArchPath;
-        public String RetroArchCore;
+        public string TestLevel;
+        public string TestLevelDest;
+        public string RetroArchPath;
+        public string RetroArchCore;
 
         #region load
 
@@ -47,7 +47,7 @@ namespace SMWPatcher
             }
         }
 
-        static private Config Load(String data)
+        static private Config Load(string data)
         {
             Config config = new Config();
 
@@ -98,7 +98,7 @@ namespace SMWPatcher
                         i++;
                     }
                 }
-                else if (!String.IsNullOrWhiteSpace(str))
+                else if (!string.IsNullOrWhiteSpace(str))
                 {
                     // flag
                     flags.Add(str.Trim());
@@ -111,9 +111,9 @@ namespace SMWPatcher
             vars.TryGetValue("input", out config.InputPath);
             vars.TryGetValue("output", out config.OutputPath);
             vars.TryGetValue("temp", out config.TempPath);
-            vars.TryGetValue("asar_path", out config.AsarPath);
             vars.TryGetValue("gps_path", out config.GPSPath);
             vars.TryGetValue("addmusick_path", out config.AddMusicKPath);
+            vars.TryGetValue("pixi_path", out config.PixiPath);
             vars.TryGetValue("lm_path", out config.LunarMagicPath);
             vars.TryGetValue("levels", out config.LevelsPath);
             vars.TryGetValue("map16", out config.Map16Path);
