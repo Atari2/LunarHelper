@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Xml.Serialization;
+using AsarCLR;
 
 namespace SMWPatcher
 {
@@ -105,42 +106,40 @@ namespace SMWPatcher
 
             // apply asar patches
             Log("1 - Patches", ConsoleColor.Cyan);
-            if (String.IsNullOrWhiteSpace(Config.AsarPath))
-                Log("No path to Asar provided, not applying any patches.", ConsoleColor.Red);
-            else if (!File.Exists(Config.AsarPath))
-                Log("Asar not found at provided path, not applying any patches.", ConsoleColor.Red);
-            else if (Config.Patches.Count == 0)
+            if (Config.Patches.Count == 0)
                 Log("Path to Asar provided, but no patches were registerd to be applied.", ConsoleColor.Red);
             else
             {
+                if (!Asar.init()) {
+                    Log("Failed to initialize asar dll", ConsoleColor.Red);
+                    return false;
+                }
+                byte[] romData = File.ReadAllBytes(Config.TempPath);
+                var headerSize = romData.Length & 0x7FFF;
+                var romsize = romData.Length - headerSize;
+                byte[] realRomData = romData[headerSize..];
+                byte[] headerData = romData[0..headerSize];
                 foreach (var patch in Config.Patches)
                 {
                     Lognl($"- Applying patch '{patch}'...  ", ConsoleColor.Yellow);
-
-                    ProcessStartInfo psi = new ProcessStartInfo(Config.AsarPath, $"\"{patch}\" \"{Config.TempPath}\"");
-                    psi.RedirectStandardOutput = true;
-                    psi.RedirectStandardError = true;
-
-                    var p = Process.Start(psi);
-                    p.WaitForExit();
-
-                    if (p.ExitCode == 0)
-                        Log("Success!", ConsoleColor.Green);
-                    else
-                    {
-                        Log("Failure!", ConsoleColor.Red);
-                        Error(p.StandardError.ReadToEnd());
+                    if (!Asar.patch(patch, ref realRomData)) {
+                        var errors = Asar.geterrors();
+                        Log($"Patching failure! {errors.Aggregate("", (x, b) => x += b.Fullerrdata + '\n')}", ConsoleColor.Red);
+                        Asar.close();
                         return false;
                     }
                 }
-
+                using var romStream = new FileStream(Config.TempPath, FileMode.Truncate);
+                romStream.Write(headerData);
+                romStream.Write(realRomData);
                 Log("Patching Success!", ConsoleColor.Green);
+                Asar.close();
                 Console.WriteLine();
             }
 
             // run GPS
             Log("2 - GPS", ConsoleColor.Cyan);
-            if (String.IsNullOrWhiteSpace(Config.GPSPath))
+            if (string.IsNullOrWhiteSpace(Config.GPSPath))
                 Log("No path to GPS provided, no music will be inserted.", ConsoleColor.Red);
             else if (!File.Exists(Config.GPSPath))
                 Log("GPS not found at provided path, no music will be inserted.", ConsoleColor.Red);
